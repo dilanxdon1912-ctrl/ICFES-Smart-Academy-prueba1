@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 export default function Inicio({ onIrAPrueba }) {
+
   // ================================
   // CONTADORES
   // ================================
@@ -14,6 +15,14 @@ export default function Inicio({ onIrAPrueba }) {
 
   const [gradoSeleccionado, setGradoSeleccionado] = useState(null);
   const [materiaSeleccionada, setMateriaSeleccionada] = useState(null);
+
+  // ================================
+  // RESULTADOS
+  // ================================
+
+  const [mostrarResultados, setMostrarResultados] = useState(false);
+  const [gradoResultados, setGradoResultados] = useState('8');
+  const [materiaResultados, setMateriaResultados] = useState(null);
 
   // ================================
   // CANTIDAD DE PREGUNTAS
@@ -51,10 +60,64 @@ export default function Inicio({ onIrAPrueba }) {
   };
 
   // ================================
+  // FECHA ACTUAL
+  // ================================
+
+  const [fechaProximoSimulacro, setFechaProximoSimulacro] = useState(
+    new Date()
+  );
+
+  useEffect(() => {
+    const actualizarFecha = () => {
+      setFechaProximoSimulacro(new Date());
+    };
+
+    actualizarFecha();
+
+    const intervalo = setInterval(actualizarFecha, 60000);
+
+    return () => clearInterval(intervalo);
+  }, []);
+
+  const diasSemana = [
+    'Domingo',
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado'
+  ];
+
+  const meses = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre'
+  ];
+
+  const diaProximoSimulacro =
+    fechaProximoSimulacro.getDate();
+
+  const mesProximoSimulacro =
+    meses[fechaProximoSimulacro.getMonth()];
+
+  const fechaTextoProximoSimulacro =
+    `${diasSemana[fechaProximoSimulacro.getDay()]}, ${diaProximoSimulacro} de ${mesProximoSimulacro}`;
+
+  // ================================
   // PROGRESO
   // ================================
 
-  const [progresoUsuario] = useState({
+  const [progresoUsuario, setProgresoUsuario] = useState({
     promedio: 0,
     materias: {
       matematicas: 0,
@@ -70,32 +133,107 @@ export default function Inicio({ onIrAPrueba }) {
   // ================================
 
   useEffect(() => {
-    const simulacrosGuardados =
-      Number(localStorage.getItem('total_simulacros')) || 0;
+    const cargarDatos = () => {
+      const simulacrosGuardados =
+        Number(localStorage.getItem('total_simulacros')) || 0;
 
-    const promedioGuardado =
-      Number(localStorage.getItem('mejora_promedio')) || 0;
+      const promedioGuardado =
+        Number(localStorage.getItem('mejora_promedio')) || 0;
 
-    const gradoGuardado =
-      localStorage.getItem('grado_simulacro');
+      const gradoGuardado =
+        localStorage.getItem('grado_simulacro');
 
-    const materiaGuardada =
-      localStorage.getItem('materia_simulacro');
+      const materiaGuardada =
+        localStorage.getItem('materia_simulacro');
 
-    setSimulacrosRealizados(simulacrosGuardados);
-    setMejoraPromedio(promedioGuardado);
+      const progresoPorGradoGuardado =
+        localStorage.getItem('progreso_por_grado');
 
-    if (gradoGuardado && cantidadesPreguntas[gradoGuardado]) {
-      setGradoSeleccionado(gradoGuardado);
-    }
+      let progresoPorGrado = {};
 
-    if (
-      materiaGuardada &&
-      gradoGuardado &&
-      cantidadesPreguntas[gradoGuardado]?.[materiaGuardada]
-    ) {
-      setMateriaSeleccionada(materiaGuardada);
-    }
+      try {
+        if (progresoPorGradoGuardado) {
+          progresoPorGrado =
+            JSON.parse(progresoPorGradoGuardado);
+        }
+      } catch (error) {
+        console.error(
+          'No se pudo cargar el progreso por grado:',
+          error
+        );
+      }
+
+      const gradoParaMostrar =
+        gradoGuardado || gradoSeleccionado;
+
+      const materias = {
+        matematicas: 0,
+        lectura: 0,
+        naturales: 0,
+        sociales: 0,
+        ingles: 0,
+        ...(progresoPorGrado[gradoParaMostrar] || {})
+      };
+
+      const resultadosDelGrado =
+        Object.values(materias).filter(
+          (valor) => Number(valor) > 0
+        );
+
+      const promedioDelGrado =
+        resultadosDelGrado.length > 0
+          ? Math.round(
+              resultadosDelGrado.reduce(
+                (total, valor) => total + Number(valor),
+                0
+              ) / resultadosDelGrado.length
+            )
+          : 0;
+
+      setSimulacrosRealizados(simulacrosGuardados);
+      setMejoraPromedio(promedioDelGrado);
+
+      setProgresoUsuario({
+        promedio: promedioDelGrado,
+        materias
+      });
+
+      if (gradoGuardado && cantidadesPreguntas[gradoGuardado]) {
+        setGradoSeleccionado(gradoGuardado);
+      }
+
+      if (
+        materiaGuardada &&
+        gradoGuardado &&
+        cantidadesPreguntas[gradoGuardado]?.[materiaGuardada]
+      ) {
+        setMateriaSeleccionada(materiaGuardada);
+      }
+    };
+
+    cargarDatos();
+
+    window.addEventListener(
+      'progresoActualizado',
+      cargarDatos
+    );
+
+    window.addEventListener(
+      'storage',
+      cargarDatos
+    );
+
+    return () => {
+      window.removeEventListener(
+        'progresoActualizado',
+        cargarDatos
+      );
+
+      window.removeEventListener(
+        'storage',
+        cargarDatos
+      );
+    };
   }, []);
 
   // ================================
@@ -167,6 +305,56 @@ export default function Inicio({ onIrAPrueba }) {
     };
 
     return nombres[materia] || '';
+  };
+
+  // ================================
+  // RESULTADOS DETALLADOS
+  // ================================
+
+  const nombresMaterias = {
+    lectura: 'Español',
+    matematicas: 'Matemáticas',
+    naturales: 'Ciencias Naturales',
+    sociales: 'Sociales y Ciudadanas',
+    ingles: 'Inglés'
+  };
+
+  const obtenerResultadosGuardados = () => {
+    try {
+      return JSON.parse(
+        localStorage.getItem('resultados_detallados') || '{}'
+      );
+    } catch {
+      return {};
+    }
+  };
+
+  const abrirResultados = () => {
+    const guardados = obtenerResultadosGuardados();
+
+    const gradosConResultados = ['8', '9', '10', '11'].filter(
+      (g) =>
+        guardados[g] &&
+        Object.keys(guardados[g]).length > 0
+    );
+
+    const ultimoGrado = String(
+      localStorage.getItem('ultimo_grado') || ''
+    );
+
+    const gradoInicial =
+      gradosConResultados.includes(ultimoGrado)
+        ? ultimoGrado
+        : gradosConResultados[0] || '8';
+
+    setGradoResultados(gradoInicial);
+
+    const materiasDelGrado = guardados[gradoInicial]
+      ? Object.keys(guardados[gradoInicial])
+      : [];
+
+    setMateriaResultados(materiasDelGrado[0] || null);
+    setMostrarResultados(true);
   };
 
   // ================================
@@ -287,6 +475,495 @@ export default function Inicio({ onIrAPrueba }) {
     }
   ];
 
+  // =========================================================
+  // PANTALLA DE RESULTADOS
+  // =========================================================
+
+  if (mostrarResultados) {
+    const resultadosGuardados = obtenerResultadosGuardados();
+    const resultadosDelGrado =
+      resultadosGuardados[gradoResultados] || {};
+
+    const materiasDisponibles =
+      Object.keys(resultadosDelGrado);
+
+    const resultadoSeleccionado = materiaResultados
+      ? resultadosDelGrado[materiaResultados]
+      : null;
+
+    const errores =
+      resultadoSeleccionado?.preguntas?.filter(
+        (item) => !item.correcta
+      ) || [];
+
+    const promedioGrado =
+      materiasDisponibles.length > 0
+        ? Math.round(
+            materiasDisponibles.reduce(
+              (total, nombreMateria) =>
+                total +
+                Number(
+                  resultadosDelGrado[nombreMateria]?.porcentaje || 0
+                ),
+              0
+            ) / materiasDisponibles.length
+          )
+        : 0;
+
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#EFF2F8',
+          padding: '30px 20px',
+          fontFamily: "'Segoe UI', Roboto, sans-serif",
+          color: '#1E293B'
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1100px',
+            margin: '0 auto'
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '15px',
+              marginBottom: '20px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div>
+              <h1
+                style={{
+                  margin: 0,
+                  color: '#1E1B4B',
+                  fontSize: '28px',
+                  fontWeight: '900'
+                }}
+              >
+                Mis resultados
+              </h1>
+
+              <p
+                style={{
+                  margin: '6px 0 0',
+                  color: '#64748B',
+                  fontSize: '13px'
+                }}
+              >
+                Revisa tus porcentajes, errores y temas para mejorar.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setMostrarResultados(false)}
+              style={{
+                border: '1px solid #C7D2FE',
+                backgroundColor: '#FFFFFF',
+                color: '#4338CA',
+                padding: '10px 18px',
+                borderRadius: '10px',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              ← Volver al inicio
+            </button>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '18px',
+              padding: '16px',
+              marginBottom: '18px'
+            }}
+          >
+            <strong
+              style={{
+                display: 'block',
+                marginBottom: '10px'
+              }}
+            >
+              Selecciona el grado
+            </strong>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                flexWrap: 'wrap'
+              }}
+            >
+              {['8', '9', '10', '11'].map((grado) => (
+                <button
+                  key={grado}
+                  onClick={() => {
+                    setGradoResultados(grado);
+
+                    setMateriaResultados(
+                      resultadosGuardados[grado]
+                        ? Object.keys(
+                            resultadosGuardados[grado]
+                          )[0] || null
+                        : null
+                    );
+                  }}
+                  style={{
+                    padding: '9px 16px',
+                    borderRadius: '10px',
+                    border:
+                      gradoResultados === grado
+                        ? '2px solid #4F46E5'
+                        : '1px solid #CBD5E1',
+                    backgroundColor:
+                      gradoResultados === grado
+                        ? '#EEF2FF'
+                        : '#FFFFFF',
+                    color:
+                      gradoResultados === grado
+                        ? '#4338CA'
+                        : '#475569',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {grado}°
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '18px',
+              padding: '20px',
+              marginBottom: '18px'
+            }}
+          >
+            <h2
+              style={{
+                margin: '0 0 6px',
+                fontSize: '20px',
+                color: '#111827'
+              }}
+            >
+              Resultados de {gradoResultados}°
+            </h2>
+
+            <p
+              style={{
+                margin: 0,
+                color: '#64748B',
+                fontSize: '12px'
+              }}
+            >
+              Promedio de las asignaturas realizadas:{' '}
+              <strong>{promedioGrado}%</strong>
+            </p>
+          </div>
+
+          {materiasDisponibles.length === 0 ? (
+            <div
+              style={{
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #E2E8F0',
+                borderRadius: '18px',
+                padding: '30px',
+                textAlign: 'center'
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>
+                Todavía no hay resultados para {gradoResultados}°
+              </h3>
+
+              <p
+                style={{
+                  color: '#64748B',
+                  fontSize: '13px'
+                }}
+              >
+                Cuando realices un simulacro de este grado, aquí aparecerá
+                su porcentaje y la corrección de cada pregunta.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns:
+                    'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '12px',
+                  marginBottom: '18px'
+                }}
+              >
+                {materiasDisponibles.map((materia) => {
+                  const resultado =
+                    resultadosDelGrado[materia];
+
+                  return (
+                    <button
+                      key={materia}
+                      onClick={() =>
+                        setMateriaResultados(materia)
+                      }
+                      style={{
+                        textAlign: 'left',
+                        backgroundColor:
+                          materiaResultados === materia
+                            ? '#EEF2FF'
+                            : '#FFFFFF',
+                        border:
+                          materiaResultados === materia
+                            ? '2px solid #4F46E5'
+                            : '1px solid #E2E8F0',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: '#475569',
+                          fontSize: '12px',
+                          fontWeight: '800'
+                        }}
+                      >
+                        {nombresMaterias[materia] || materia}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: '28px',
+                          fontWeight: '900',
+                          color: '#4338CA',
+                          marginTop: '5px'
+                        }}
+                      >
+                        {resultado?.porcentaje || 0}%
+                      </div>
+
+                      <div
+                        style={{
+                          color: '#64748B',
+                          fontSize: '11px'
+                        }}
+                      >
+                        {resultado?.correctas || 0} de{' '}
+                        {resultado?.total || 0} correctas
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {resultadoSeleccionado && (
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '18px',
+                    padding: '22px'
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: '15px',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      marginBottom: '18px'
+                    }}
+                  >
+                    <div>
+                      <h2
+                        style={{
+                          margin: 0,
+                          fontSize: '20px'
+                        }}
+                      >
+                        {nombresMaterias[materiaResultados] ||
+                          materiaResultados}{' '}
+                        · {gradoResultados}°
+                      </h2>
+
+                      <p
+                        style={{
+                          margin: '5px 0 0',
+                          color: '#64748B',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Resultado:{' '}
+                        <strong>
+                          {resultadoSeleccionado.porcentaje}%
+                        </strong>
+                        {' · '}
+                        {resultadoSeleccionado.correctas} de{' '}
+                        {resultadoSeleccionado.total} correctas
+                      </p>
+                    </div>
+                  </div>
+
+                  <h3
+                    style={{
+                      fontSize: '16px',
+                      margin: '0 0 12px'
+                    }}
+                  >
+                    Preguntas que debes corregir ({errores.length})
+                  </h3>
+
+                  {errores.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '18px',
+                        borderRadius: '12px',
+                        backgroundColor: '#ECFDF5',
+                        color: '#047857',
+                        fontWeight: '700'
+                      }}
+                    >
+                      🎉 No tuviste errores en este simulacro.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '14px'
+                      }}
+                    >
+                      {errores.map((item) => (
+                        <div
+                          key={item.numero}
+                          style={{
+                            border: '1px solid #F1F5F9',
+                            borderRadius: '14px',
+                            padding: '17px',
+                            backgroundColor: '#FAFAFA'
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              gap: '10px',
+                              marginBottom: '8px',
+                              flexWrap: 'wrap'
+                            }}
+                          >
+                            <strong>
+                              Pregunta {item.numero}
+                            </strong>
+
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: '800',
+                                color: '#B45309'
+                              }}
+                            >
+                              {item.tema}
+                            </span>
+                          </div>
+
+                          <p
+                            style={{
+                              margin: '0 0 12px',
+                              lineHeight: '1.6',
+                              fontSize: '13px'
+                            }}
+                          >
+                            {item.texto}
+                          </p>
+
+                          <p
+                            style={{
+                              margin: '0 0 10px',
+                              fontWeight: '700',
+                              fontSize: '13px'
+                            }}
+                          >
+                            {item.pregunta}
+                          </p>
+
+                          <div
+                            style={{
+                              display: 'grid',
+                              gap: '7px'
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: '10px',
+                                borderRadius: '9px',
+                                backgroundColor: '#FEF2F2',
+                                color: '#991B1B',
+                                fontSize: '12px'
+                              }}
+                            >
+                              ❌ Tu respuesta:{' '}
+                              <strong>
+                                {item.respuestaSeleccionadaTexto ||
+                                  'Sin respuesta'}
+                              </strong>
+                            </div>
+
+                            <div
+                              style={{
+                                padding: '10px',
+                                borderRadius: '9px',
+                                backgroundColor: '#ECFDF5',
+                                color: '#047857',
+                                fontSize: '12px'
+                              }}
+                            >
+                              ✅ Respuesta correcta:{' '}
+                              <strong>
+                                {item.respuestaCorrectaTexto}
+                              </strong>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: '10px',
+                              padding: '10px',
+                              borderRadius: '9px',
+                              backgroundColor: '#EEF2FF',
+                              color: '#3730A3',
+                              fontSize: '12px',
+                              lineHeight: '1.5'
+                            }}
+                          >
+                            <strong>Para mejorar:</strong>{' '}
+                            repasa el tema{' '}
+                            <strong>{item.tema}</strong> y vuelve a
+                            intentar preguntas de este tipo.
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -303,22 +980,26 @@ export default function Inicio({ onIrAPrueba }) {
           grid-template-columns: minmax(0, 1fr) 340px;
           gap: 24px;
         }
+
         .banner-grid {
           display: grid;
           grid-template-columns: 1fr 1.1fr;
           gap: 20px;
           align-items: center;
         }
+
         .grados-grid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 12px;
         }
+
         .materias-grid {
           display: grid;
           grid-template-columns: repeat(5, minmax(0, 1fr));
           gap: 12px;
         }
+
         .mas-simulacros-grid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -329,6 +1010,7 @@ export default function Inicio({ onIrAPrueba }) {
           .main-container {
             grid-template-columns: 1fr !important;
           }
+
           .materias-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           }
@@ -338,12 +1020,15 @@ export default function Inicio({ onIrAPrueba }) {
           .banner-grid {
             grid-template-columns: 1fr !important;
           }
+
           .grados-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           }
+
           .materias-grid {
             grid-template-columns: 1fr !important;
           }
+
           .mas-simulacros-grid {
             grid-template-columns: 1fr !important;
           }
@@ -358,6 +1043,7 @@ export default function Inicio({ onIrAPrueba }) {
           padding: '20px 15px'
         }}
       >
+
         {/* ================================
             COLUMNA IZQUIERDA
         ================================ */}
@@ -370,6 +1056,7 @@ export default function Inicio({ onIrAPrueba }) {
             minWidth: 0
           }}
         >
+
           {/* BANNER */}
 
           <div
@@ -438,11 +1125,7 @@ export default function Inicio({ onIrAPrueba }) {
                 </button>
 
                 <button
-                  onClick={() =>
-                    alert(
-                      'Todavía estamos creando tus resultados.'
-                    )
-                  }
+                  onClick={abrirResultados}
                   style={{
                     backgroundColor: '#EEF2FF',
                     color: '#4338CA',
@@ -474,6 +1157,7 @@ export default function Inicio({ onIrAPrueba }) {
                     }}
                   >
                     <span>📝</span>
+
                     <strong>
                       {simulacrosRealizados.toLocaleString()}
                     </strong>
@@ -498,6 +1182,7 @@ export default function Inicio({ onIrAPrueba }) {
                     }}
                   >
                     <span>🏆</span>
+
                     <strong>{mejoraPromedio}%</strong>
                   </div>
 
@@ -895,6 +1580,7 @@ export default function Inicio({ onIrAPrueba }) {
             minWidth: 0
           }}
         >
+
           {/* PROGRESO */}
 
           <div
@@ -912,6 +1598,9 @@ export default function Inicio({ onIrAPrueba }) {
               }}
             >
               Tu progreso general
+              {localStorage.getItem('ultimo_grado')
+                ? ` - ${localStorage.getItem('ultimo_grado')}° grado`
+                : ''}
             </h4>
 
             <div
@@ -998,7 +1687,7 @@ export default function Inicio({ onIrAPrueba }) {
             </div>
           </div>
 
-          {/* PRÓXIMO SIMULACRO */}
+          {/* FECHA DE INICIO */}
 
           <div
             style={{
@@ -1014,7 +1703,7 @@ export default function Inicio({ onIrAPrueba }) {
                 fontSize: '13px'
               }}
             >
-              Próximo simulacro
+              Fecha de inicio
             </h4>
 
             <div
@@ -1040,7 +1729,7 @@ export default function Inicio({ onIrAPrueba }) {
                     display: 'block'
                   }}
                 >
-                  19
+                  {diaProximoSimulacro}
                 </strong>
 
                 <span
@@ -1049,28 +1738,21 @@ export default function Inicio({ onIrAPrueba }) {
                     color: '#4F46E5'
                   }}
                 >
-                  MAY
+                  {mesProximoSimulacro
+                    .slice(0, 3)
+                    .toUpperCase()}
                 </span>
               </div>
 
               <div>
-                <h5
-                  style={{
-                    margin: 0,
-                    fontSize: '12px'
-                  }}
-                >
-                  Simulacro Saber 11
-                </h5>
-
                 <p
                   style={{
-                    margin: '2px 0',
+                    margin: 0,
                     fontSize: '10px',
                     color: '#64748B'
                   }}
                 >
-                  Domingo, 19 de Mayo - 9:00 AM
+                  {fechaTextoProximoSimulacro}
                 </p>
               </div>
             </div>
@@ -1095,13 +1777,20 @@ export default function Inicio({ onIrAPrueba }) {
               Últimas actividades
             </h4>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}
+            >
               <div
                 style={{
                   backgroundColor: '#FFFFFF',
                   padding: '16px',
                   borderRadius: '12px',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                  boxShadow:
+                    '0 1px 3px rgba(0, 0, 0, 0.1)',
                   border: '1px solid #E2E8F0'
                 }}
               >
@@ -1113,8 +1802,9 @@ export default function Inicio({ onIrAPrueba }) {
                     margin: '0 0 4px 0'
                   }}
                 >
-                  Estado de la Evaluación
+                  Último simulacro
                 </h3>
+
                 <p
                   style={{
                     margin: '2px 0',
@@ -1122,11 +1812,53 @@ export default function Inicio({ onIrAPrueba }) {
                     color: '#64748B'
                   }}
                 >
-                  Evaluación diagnóstica completa
+                  {localStorage.getItem('ultimo_grado')
+                    ? `${localStorage.getItem('ultimo_grado')}° Grado · ${
+                        localStorage.getItem(
+                          'ultimo_materia'
+                        ) === 'lectura'
+                          ? 'Español'
+                          : localStorage.getItem(
+                              'ultimo_materia'
+                            ) === 'matematicas'
+                          ? 'Matemáticas'
+                          : localStorage.getItem(
+                              'ultimo_materia'
+                            ) === 'naturales'
+                          ? 'Naturales'
+                          : localStorage.getItem(
+                              'ultimo_materia'
+                            ) === 'sociales'
+                          ? 'Sociales'
+                          : localStorage.getItem(
+                              'ultimo_materia'
+                            ) === 'ingles'
+                          ? 'Inglés'
+                          : 'Simulacro'
+                      }`
+                    : 'Todavía no has realizado un simulacro.'}
+
+                  <br />
+
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '5px',
+                      fontWeight: '700'
+                    }}
+                  >
+                    Resultado:{' '}
+                    {localStorage.getItem(
+                      'ultimo_resultado'
+                    )
+                      ? `${localStorage.getItem(
+                          'ultimo_resultado'
+                        )}%`
+                      : '0%'}
+                  </span>
                 </p>
               </div>
             </div>
-
           </div>
         </div>
       </div>
